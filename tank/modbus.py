@@ -13,3 +13,10 @@ import threading
 
 READ_HOLDING, READ_INPUT, WRITE_SINGLE, WRITE_MULTIPLE = 0x03, 0x04, 0x06, 0x10
 
+
+class ModbusException(Exception):
+    def __init__(self, code):
+        super().__init__(f"modbus exception {code}")
+        self.code = code
+
+
