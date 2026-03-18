@@ -20,3 +20,13 @@ class ModbusException(Exception):
         self.code = code
 
 
+def recv_exact(sock, n):
+    buf = bytearray()
+    while len(buf) < n:
+        part = sock.recv(n - len(buf))
+        if not part:
+            raise ConnectionError("closed")
+        buf += part
+    return bytes(buf)
+
+
