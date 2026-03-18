@@ -30,3 +30,14 @@ def recv_exact(sock, n):
     return bytes(buf)
 
 
+def frame(tid, unit, pdu):
+    return struct.pack(">HHHB", tid, 0, len(pdu) + 1, unit) + pdu
+
+
+def read_frame(sock):
+    tid, pid, length, unit = struct.unpack(">HHHB", recv_exact(sock, 7))
+    if pid != 0 or not 1 <= length <= 254:
+        raise ConnectionError("bad MBAP header")
+    return tid, unit, recv_exact(sock, length - 1)
+
+
