@@ -82,3 +82,19 @@ def handle_pdu(regs: Registers, pdu: bytes) -> bytes:
             return pdu[:5]
         raise ModbusException(1)
     except ModbusException as e:
+        return bytes([fc | 0x80, e.code])
+    except struct.error:
+        return bytes([fc | 0x80, 3])
+
+
+class _Handler(socketserver.BaseRequestHandler):
+    def handle(self):
+        s = self.request
+        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        try:
+            while True:                                      # persistent connection: many requests per socket
+                tid, unit, pdu = read_frame(s)
+                s.sendall(frame(tid, unit, handle_pdu(self.server.regs, pdu)))
+        except (ConnectionError, OSError):
+            pass
+
