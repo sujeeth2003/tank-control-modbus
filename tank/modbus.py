@@ -98,3 +98,17 @@ class _Handler(socketserver.BaseRequestHandler):
         except (ConnectionError, OSError):
             pass
 
+
+class ModbusServer(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+    def __init__(self, regs, host="127.0.0.1", port=0):
+        super().__init__((host, port), _Handler)
+        self.regs = regs
+        self.addr = self.server_address
+
+    def start(self):
+        threading.Thread(target=self.serve_forever, daemon=True).start()
+        return self
+
