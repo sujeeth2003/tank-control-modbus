@@ -41,3 +41,12 @@ def read_frame(sock):
     return tid, unit, recv_exact(sock, length - 1)
 
 
+class Registers:
+    """Thread-safe register bank shared between the protocol server and the plant model."""
+
+    def __init__(self, n_input=16, n_holding=16):
+        self.input = [0] * n_input
+        self.holding = [0] * n_holding
+        self.lock = threading.Lock()
+
+
