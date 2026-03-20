@@ -50,3 +50,35 @@ class Registers:
         self.lock = threading.Lock()
 
 
+def handle_pdu(regs: Registers, pdu: bytes) -> bytes:
+    fc = pdu[0]
+    try:
+        if fc in (READ_HOLDING, READ_INPUT):
+            addr, qty = struct.unpack(">HH", pdu[1:5])
+            bank = regs.holding if fc == READ_HOLDING else regs.input
+            if not 1 <= qty <= 125:
+                raise ModbusException(3)
+            if addr + qty > len(bank):
+                raise ModbusException(2)
+            with regs.lock:
+                vals = bank[addr:addr + qty]
+            return bytes([fc, qty * 2]) + struct.pack(f">{qty}H", *vals)
+        if fc == WRITE_SINGLE:
+            addr, val = struct.unpack(">HH", pdu[1:5])
+            if addr >= len(regs.holding):
+                raise ModbusException(2)
+            with regs.lock:
+                regs.holding[addr] = val
+            return pdu[:5]
+        if fc == WRITE_MULTIPLE:
+            addr, qty, nbytes = struct.unpack(">HHB", pdu[1:6])
+            if not 1 <= qty <= 123 or nbytes != qty * 2:
+                raise ModbusException(3)
+            if addr + qty > len(regs.holding):
+                raise ModbusException(2)
+            vals = struct.unpack(f">{qty}H", pdu[6:6 + nbytes])
+            with regs.lock:
+                regs.holding[addr:addr + qty] = list(vals)
+            return pdu[:5]
+        raise ModbusException(1)
+    except ModbusException as e:
