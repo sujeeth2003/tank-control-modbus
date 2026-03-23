@@ -34,3 +34,35 @@ static bool send_all(sock_t s, const uint8_t* p, size_t n) {
   while (n) { int k = send(s, (const char*)p, (int)n, 0); if (k <= 0) return false; p += k; n -= k; }
   return true;
 }
+static bool recv_all(sock_t s, uint8_t* p, size_t n) {
+  while (n) { int k = recv(s, (char*)p, (int)n, 0); if (k <= 0) return false; p += k; n -= k; }
+  return true;
+}
+
+struct Modbus {
+  sock_t s{}; uint16_t tid = 0;
+  // one request/response transaction; returns false on any error or Modbus exception
+  bool call(const uint8_t* pdu, size_t n, uint8_t* resp, size_t& rn) {
+    uint8_t buf[260]; ++tid;
+    buf[0] = tid >> 8; buf[1] = tid & 0xFF; buf[2] = buf[3] = 0;
+    buf[4] = (uint8_t)((n + 1) >> 8); buf[5] = (uint8_t)((n + 1) & 0xFF); buf[6] = 1;
+    std::memcpy(buf + 7, pdu, n);
+    if (!send_all(s, buf, 7 + n)) return false;
+    uint8_t h[7];
+    if (!recv_all(s, h, 7)) return false;
+    size_t len = ((size_t)h[4] << 8 | h[5]) - 1;
+    if (len == 0 || len > 253 || !recv_all(s, resp, len)) return false;
+    rn = len;
+    return !(resp[0] & 0x80) && (((uint16_t)h[0] << 8 | h[1]) == tid);
+  }
+  bool read_input(uint16_t addr, uint16_t& out) {
+    uint8_t pdu[5] = {0x04, (uint8_t)(addr >> 8), (uint8_t)addr, 0, 1}, r[260]; size_t rn;
+    if (!call(pdu, 5, r, rn) || rn < 4) return false;
+    out = (uint16_t)(r[2] << 8 | r[3]);
+    return true;
+  }
+  bool write_single(uint16_t addr, uint16_t v) {
+    uint8_t pdu[5] = {0x06, (uint8_t)(addr >> 8), (uint8_t)addr, (uint8_t)(v >> 8), (uint8_t)v}, r[260]; size_t rn;
+    return call(pdu, 5, r, rn);
+  }
+};
