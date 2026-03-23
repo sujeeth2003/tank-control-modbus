@@ -112,3 +112,23 @@ class ModbusServer(socketserver.ThreadingTCPServer):
         threading.Thread(target=self.serve_forever, daemon=True).start()
         return self
 
+    def stop(self):
+        self.shutdown(); self.server_close()
+
+
+class ModbusClient:
+    def __init__(self, host, port, unit=1, timeout=2.0):
+        self.sock = socket.create_connection((host, port), timeout=timeout)
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.unit, self.tid = unit, 0
+
+    def _call(self, pdu):
+        self.tid = (self.tid + 1) & 0xFFFF
+        self.sock.sendall(frame(self.tid, self.unit, pdu))
+        tid, _, resp = read_frame(self.sock)
+        if tid != self.tid:
+            raise ConnectionError("transaction id mismatch")
+        if resp[0] & 0x80:
+            raise ModbusException(resp[1])
+        return resp
+
