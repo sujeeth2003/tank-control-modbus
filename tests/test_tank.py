@@ -55,3 +55,15 @@ class PlantTests(unittest.TestCase):
         self.assertAlmostEqual(p.h, 1.0, delta=0.01)
         c.close(); srv.stop()
 
+    def test_interlock_overrides_controller(self):
+        srv = PlantServer(h0=1.7, noise_mm=0).start(run=False)
+        c = ModbusClient(*srv.addr); c.write_single(0, 1000)            # controller demands full open
+        peak, tripped = 0.0, False
+        for _ in range(4000):
+            srv.plant.step(0.01)
+            peak = max(peak, srv.plant.h * 1000); tripped |= bool(srv.regs.input[2] & 2)
+        self.assertTrue(tripped)                                        # the interlock did engage
+        self.assertLessEqual(peak, 1850)                                # and the level never ran away past the trip point
+        c.close(); srv.stop()
+
+
