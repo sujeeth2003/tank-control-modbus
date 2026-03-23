@@ -40,3 +40,18 @@ class ModbusTests(unittest.TestCase):
         self.assertEqual(e.exception.code, 3)                          # illegal data value
         self.assertEqual(handle_pdu(self.regs, bytes([0x2B, 0, 0])), bytes([0xAB, 1]))   # unsupported function
 
+    def test_many_requests_on_one_connection(self):
+        for i in range(500):
+            self.cli.write_single(0, i); self.assertEqual(self.cli.read_holding(0), [i])
+
+
+class PlantTests(unittest.TestCase):
+    def test_open_loop_fills_and_settles_to_torricelli_equilibrium(self):
+        srv = PlantServer(h0=0.2, noise_mm=0).start(run=False)
+        c = ModbusClient(*srv.addr); c.write_single(0, 500)             # valve 50%: q_in = 0.01 = k*sqrt(h) -> h = 1 m
+        time.sleep(0.05)
+        p = srv.plant
+        for _ in range(30000): p.step(0.01)                             # fast-forward 300 s of plant time
+        self.assertAlmostEqual(p.h, 1.0, delta=0.01)
+        c.close(); srv.stop()
+
