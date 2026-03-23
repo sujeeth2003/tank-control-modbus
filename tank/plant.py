@@ -19,3 +19,35 @@ import random
 import threading
 import time
 
+from .modbus import ModbusServer, Registers
+
+
+class TankPlant:
+    def __init__(self, regs: Registers, area=0.02, k=0.01, q_max=0.02, h0=0.3, tau_valve=0.4, rate_limit=1.0,
+                 noise_mm=2.0, high_trip_mm=1800, high_reset_mm=1650, seed=0):
+        self.regs, self.A, self.k, self.q_max = regs, area, k, q_max
+        self.h, self.valve = h0, 0.0                     # metres, 0..1
+        self.tau, self.rate_limit, self.noise_mm = tau_valve, rate_limit, noise_mm
+        self.trip, self.reset, self.tripped = high_trip_mm, high_reset_mm, False
+        self.rng, self.steps = random.Random(seed), 0
+
+    def step(self, dt):
+        with self.regs.lock:
+            cmd = self.regs.holding[0] / 1000.0
+            demand = self.regs.holding[2] / 1000.0
+        level_mm = self.h * 1000
+        if level_mm >= self.trip: self.tripped = True
+        elif level_mm <= self.reset: self.tripped = False
+        if self.tripped: cmd = 0.0
+        # actuator: first-order lag with a slew-rate limit
+        dv = (cmd - self.valve) / self.tau * dt
+        dv = max(-self.rate_limit * dt, min(self.rate_limit * dt, dv))
+        self.valve = min(1.0, max(0.0, self.valve + dv))
+        q_in = self.q_max * self.valve
+        q_out = self.k * (1.0 + demand) * math.sqrt(max(self.h, 0.0))
+        self.h = min(2.0, max(0.0, self.h + (q_in - q_out) / self.A * dt))
+        self.steps += 1
+        meas = int(round(self.h * 1000 + self.rng.gauss(0, self.noise_mm)))
+        with self.regs.lock:
+            self.regs.input[0] = max(0, min(65535, meas))
+            self.regs.input[1] = int(self.valve * 1000)
