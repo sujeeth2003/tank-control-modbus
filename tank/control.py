@@ -23,3 +23,16 @@ class PID:
             self.integral += self.ki * err * dt
         return u
 
+
+class Hysteresis:
+    """On/off (bang-bang) controller with a dead band, as a simple PLC would do it."""
+
+    def __init__(self, band=30.0, on=1000.0, off=0.0):
+        self.band, self.on, self.off, self.state = band, on, off, False
+
+    def update(self, setpoint, meas, dt):
+        if meas < setpoint - self.band: self.state = True
+        elif meas > setpoint + self.band: self.state = False
+        return self.on if self.state else self.off
+
+
