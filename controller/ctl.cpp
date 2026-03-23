@@ -13,3 +13,18 @@
 #include <cstring>
 #include <vector>
 
+#ifdef _WIN32
+  #include <winsock2.h>
+  #include <ws2tcpip.h>
+  using sock_t = SOCKET;
+  static void sock_close(sock_t s) { closesocket(s); }
+#else
+  #include <arpa/inet.h>
+  #include <netinet/in.h>
+  #include <netinet/tcp.h>
+  #include <sys/socket.h>
+  #include <unistd.h>
+  using sock_t = int;
+  static void sock_close(sock_t s) { close(s); }
+#endif
+
