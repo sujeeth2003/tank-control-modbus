@@ -67,3 +67,25 @@ class PlantServer:
         self._stop = threading.Event()
         self.log = []                                    # (t, true level mm, valve permille) sampled at ~50 Hz
 
+    def start(self, run=True):
+        """run=False serves Modbus but leaves the plant frozen, so tests can step it deterministically."""
+        self.server.start()
+        if run:
+            threading.Thread(target=self._run, daemon=True).start()
+        return self
+
+    def _run(self):
+        t0 = last = time.perf_counter()
+        next_log = 0.0
+        while not self._stop.is_set():
+            now = time.perf_counter()
+            self.plant.step(now - last)
+            last = now
+            if now - t0 >= next_log:
+                self.log.append((now - t0, self.plant.h * 1000, self.plant.valve * 1000))
+                next_log += 0.02
+            time.sleep(self.step_s)
+
+    def stop(self):
+        self._stop.set()
+        self.server.stop()
