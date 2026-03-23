@@ -36,3 +36,33 @@ class Hysteresis:
         return self.on if self.state else self.off
 
 
+def run_loop(host, port, controller, setpoint_mm, rate_hz=100, seconds=20.0, setpoint_fn=None, on_tick=None):
+    """Fixed-rate loop. Each cycle: read level -> decide -> write valve. Returns per-cycle records and latencies (ns).
+    'decision latency' = time from starting the read to the write being acknowledged (a full sensor-to-actuator round trip)."""
+    cli = ModbusClient(host, port)
+    period = 1.0 / rate_hz
+    lat, rec = [], []
+    t0 = nxt = time.perf_counter()
+    last = t0
+    while True:
+        now = time.perf_counter()
+        if now - t0 >= seconds:
+            break
+        if now < nxt:
+            time.sleep(max(0.0, nxt - now - 0.0005))       # coarse sleep, then spin for the last 0.5 ms
+            while time.perf_counter() < nxt: pass
+        c0 = time.perf_counter_ns()
+        level = cli.read_input(0)[0]
+        sp = setpoint_fn(time.perf_counter() - t0) if setpoint_fn else setpoint_mm
+        u = controller.update(sp, level, time.perf_counter() - last)
+        last = time.perf_counter()
+        cli.write_single(0, int(round(u)))
+        lat.append(time.perf_counter_ns() - c0)
+        rec.append((last - t0, sp, level, u))
+        if on_tick: on_tick(rec[-1])
+        nxt += period
+        if nxt < time.perf_counter() - period:              # overran badly: resync instead of bursting
+            nxt = time.perf_counter() + period
+    cli.close()
+    return rec, lat
+
