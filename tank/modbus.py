@@ -132,3 +132,19 @@ class ModbusClient:
             raise ModbusException(resp[1])
         return resp
 
+    def read_input(self, addr, qty=1):
+        r = self._call(struct.pack(">BHH", READ_INPUT, addr, qty))
+        return list(struct.unpack(f">{r[1] // 2}H", r[2:]))
+
+    def read_holding(self, addr, qty=1):
+        r = self._call(struct.pack(">BHH", READ_HOLDING, addr, qty))
+        return list(struct.unpack(f">{r[1] // 2}H", r[2:]))
+
+    def write_single(self, addr, value):
+        self._call(struct.pack(">BHH", WRITE_SINGLE, addr, value & 0xFFFF))
+
+    def write_multiple(self, addr, values):
+        self._call(struct.pack(">BHHB", WRITE_MULTIPLE, addr, len(values), len(values) * 2) + struct.pack(f">{len(values)}H", *values))
+
+    def close(self):
+        self.sock.close()
