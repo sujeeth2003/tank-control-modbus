@@ -25,3 +25,18 @@ class ModbusTests(unittest.TestCase):
         pdu = struct.pack(">BHH", 0x03, 0x006B, 2)
         self.assertEqual(frame(1, 0x11, pdu).hex(), "00010000000611030" + "06b0002")
 
+    def test_write_read_roundtrip(self):
+        self.cli.write_single(3, 1234)
+        self.assertEqual(self.cli.read_holding(3), [1234])
+        self.cli.write_multiple(4, [1, 2, 3])
+        self.assertEqual(self.cli.read_holding(3, 4), [1234, 1, 2, 3])
+        self.regs.input[5] = 777
+        self.assertEqual(self.cli.read_input(5), [777])
+
+    def test_exceptions(self):
+        with self.assertRaises(ModbusException) as e: self.cli.read_input(100, 1)
+        self.assertEqual(e.exception.code, 2)                          # illegal data address
+        with self.assertRaises(ModbusException) as e: self.cli.read_holding(0, 0)
+        self.assertEqual(e.exception.code, 3)                          # illegal data value
+        self.assertEqual(handle_pdu(self.regs, bytes([0x2B, 0, 0])), bytes([0xAB, 1]))   # unsupported function
+
