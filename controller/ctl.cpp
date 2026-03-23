@@ -80,3 +80,37 @@ int main(int argc, char** argv) {
   int one = 1; setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (const char*)&one, sizeof one);
   Modbus mb{s};
 
+  const double kp = 0.6, ki = 0.25, kd = 0.0;
+  double integral = 0, prev = -1, d = 0;
+  std::vector<uint32_t> lat_ns; std::vector<double> err;
+  auto t0 = clk::now(), next = t0, last = t0;
+  const auto period = std::chrono::duration_cast<clk::duration>(std::chrono::duration<double>(1.0 / rate));
+  long overruns = 0;
+  while (std::chrono::duration<double>(clk::now() - t0).count() < seconds) {
+    while (clk::now() < next) {}                        // busy-wait for the tick (lowest jitter; burns a core by design)
+    auto c0 = clk::now();
+    uint16_t level;
+    if (!mb.read_input(0, level)) { std::fprintf(stderr, "read failed\n"); break; }
+    auto now = clk::now();
+    double dt = std::chrono::duration<double>(now - last).count(); last = now;
+    double e = sp - level;
+    if (prev >= 0 && dt > 0) d += 0.1 * (-(level - prev) / dt - d);
+    prev = level;
+    double u = kp * e + integral + kd * d, uc = std::min(1000.0, std::max(0.0, u));
+    if (u == uc || (u > 1000 && e < 0) || (u < 0 && e > 0)) integral += ki * e * dt;   // anti-windup
+    if (!mb.write_single(0, (uint16_t)(uc + 0.5))) { std::fprintf(stderr, "write failed\n"); break; }
+    lat_ns.push_back((uint32_t)std::chrono::duration_cast<std::chrono::nanoseconds>(clk::now() - c0).count());
+    err.push_back(std::abs(e));
+    next += period;
+    if (clk::now() > next + period) { next = clk::now() + period; ++overruns; }
+  }
+  if (lat_ns.empty()) return 1;
+  std::sort(lat_ns.begin(), lat_ns.end());
+  auto pct = [&](double q) { return lat_ns[std::min(lat_ns.size() - 1, (size_t)(q * lat_ns.size()))] / 1000.0; };
+  double iae = 0; for (double x : err) iae += x; iae /= err.size();
+  std::printf("cycles=%zu rate=%.0f Hz overruns=%ld\n", lat_ns.size(), rate, overruns);
+  std::printf("latency us: p50=%.0f p99=%.0f p99.9=%.0f max=%.0f\n", pct(.5), pct(.99), pct(.999), lat_ns.back() / 1000.0);
+  std::printf("mean |error| = %.1f mm over the whole run\n", iae);
+  sock_close(s);
+  return 0;
+}
