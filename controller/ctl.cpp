@@ -66,3 +66,17 @@ struct Modbus {
     return call(pdu, 5, r, rn);
   }
 };
+
+int main(int argc, char** argv) {
+  if (argc < 6) { std::fprintf(stderr, "usage: %s host port setpoint_mm rate_hz seconds\n", argv[0]); return 2; }
+  const char* host = argv[1]; int port = std::atoi(argv[2]);
+  double sp = std::atof(argv[3]), rate = std::atof(argv[4]), seconds = std::atof(argv[5]);
+#ifdef _WIN32
+  WSADATA wsa; WSAStartup(MAKEWORD(2, 2), &wsa);
+#endif
+  sock_t s = socket(AF_INET, SOCK_STREAM, 0);
+  sockaddr_in a{}; a.sin_family = AF_INET; a.sin_port = htons((uint16_t)port); inet_pton(AF_INET, host, &a.sin_addr);
+  if (connect(s, (sockaddr*)&a, sizeof a) != 0) { std::perror("connect"); return 1; }
+  int one = 1; setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (const char*)&one, sizeof one);
+  Modbus mb{s};
+
