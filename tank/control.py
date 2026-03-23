@@ -66,3 +66,12 @@ def run_loop(host, port, controller, setpoint_mm, rate_hz=100, seconds=20.0, set
     cli.close()
     return rec, lat
 
+
+def summarize(rec, lat_ns, settle_band_mm=25):
+    import statistics
+    lat = sorted(lat_ns)
+    pct = lambda q: lat[min(len(lat) - 1, int(q * len(lat)))] / 1000.0
+    out = {"cycles": len(lat), "lat_p50_us": pct(0.5), "lat_p99_us": pct(0.99), "lat_max_us": lat[-1] / 1000.0}
+    err = [abs(sp - lv) for _, sp, lv, _ in rec]
+    out["iae_mm"] = sum(err) / len(err)
+    return out
