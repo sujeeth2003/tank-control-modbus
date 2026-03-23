@@ -28,3 +28,9 @@
   static void sock_close(sock_t s) { close(s); }
 #endif
 
+using clk = std::chrono::steady_clock;
+
+static bool send_all(sock_t s, const uint8_t* p, size_t n) {
+  while (n) { int k = send(s, (const char*)p, (int)n, 0); if (k <= 0) return false; p += k; n -= k; }
+  return true;
+}
