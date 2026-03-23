@@ -51,3 +51,19 @@ class TankPlant:
         with self.regs.lock:
             self.regs.input[0] = max(0, min(65535, meas))
             self.regs.input[1] = int(self.valve * 1000)
+            self.regs.input[2] = (1 if level_mm >= self.trip - 100 else 0) | (2 if self.tripped else 0)
+            self.regs.input[3] = self.steps & 0xFFFF
+            self.regs.input[4] = int(self.h * 1000)
+
+
+class PlantServer:
+    """Runs the plant in real time (dt = wall-clock time since the last step) next to a Modbus/TCP server."""
+
+    def __init__(self, host="127.0.0.1", port=0, step_s=0.002, **plant_kw):
+        self.regs = Registers()
+        self.plant = TankPlant(self.regs, **plant_kw)
+        self.server = ModbusServer(self.regs, host, port)
+        self.addr, self.step_s = self.server.addr, step_s
+        self._stop = threading.Event()
+        self.log = []                                    # (t, true level mm, valve permille) sampled at ~50 Hz
+
