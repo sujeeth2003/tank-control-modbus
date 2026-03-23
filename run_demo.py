@@ -12,3 +12,18 @@ from tank.modbus import ModbusClient
 from tank.plant import PlantServer
 
 
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--seconds", type=float, default=32.0)
+    ap.add_argument("--rate", type=float, default=200.0)
+    ap.add_argument("--plot")
+    a = ap.parse_args()
+
+    srv = PlantServer(h0=0.3).start()
+    host, port = srv.addr
+    dist = ModbusClient(host, port)
+    events = {"disturbed": False}
+
+    def setpoint(t):
+        return 1000 if t < 10 else 1400 if t < 24 else 1900
+
