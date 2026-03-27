@@ -67,3 +67,24 @@ class PlantTests(unittest.TestCase):
         c.close(); srv.stop()
 
 
+class ControlTests(unittest.TestCase):
+    def test_pid_tracks_setpoint_in_real_time_and_reports_latency(self):
+        srv = PlantServer(h0=0.4).start()
+        rec, lat = run_loop(*srv.addr, PID(0.6, 0.25, 0.0), 1000, rate_hz=100, seconds=14.0)
+        srv.stop()
+        tail = [r for r in rec if r[0] > 11]
+        self.assertLess(sum(abs(r[1] - r[2]) for r in tail) / len(tail), 15)   # settled within 15 mm mean error
+        s = summarize(rec, lat)
+        self.assertGreater(s["cycles"], 1000)
+        self.assertLess(s["lat_p50_us"], 5000)
+
+    def test_hysteresis_stays_inside_band(self):
+        srv = PlantServer(h0=0.4, noise_mm=0).start()
+        rec, _ = run_loop(*srv.addr, Hysteresis(band=40), 1000, rate_hz=100, seconds=14.0)
+        srv.stop()
+        tail = [r[2] for r in rec if r[0] > 9]
+        self.assertLess(max(tail), 1120); self.assertGreater(min(tail), 880)
+
+
+if __name__ == "__main__":
+    unittest.main()
