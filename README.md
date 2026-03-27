@@ -10,3 +10,11 @@ A nonlinear tank process is simulated in Python and exposed through a real **Mod
    noisy level sensor, PLC safety interlock       latency measured per cycle: p50 / p99 / p99.9 / max
 ```
 
+## The process (`tank/plant.py`)
+`A dh/dt = q_in - k(1 + demand) sqrt(h)`, with `q_in = q_max * valve`; the valve is an actuator (first-order lag + slew-rate limit); the sensor has Gaussian noise and 1 mm quantisation. An operator "demand" register acts as a disturbance (outlet opening). An independent **high-level interlock** (trip at 1800 mm, reset 1650 mm) forces the valve closed regardless of what the controller says, like a hard-wired safety trip.
+
+Modbus map: input reg 0 = level (mm), 1 = valve position, 2 = alarm bits, 3 = heartbeat; holding reg 0 = valve command (permille), 2 = outlet demand.
+
+## Protocol (`tank/modbus.py`)
+Modbus/TCP written from the spec: MBAP framing, function codes 03/04/06/16, exception responses (illegal function / address / value), persistent connections, transaction-id checking. The C++ controller re-implements the client side independently, so the two interoperate over the wire.
+
