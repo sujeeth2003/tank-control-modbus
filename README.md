@@ -36,3 +36,9 @@ C++ PID against the same plant server (`build/ctl 127.0.0.1 1502 1000 <rate> <s>
 | 1 kHz, 12 s | 12,001 | 0 | 79 us | 434 us | 652 us | 1.3 ms |
 | 5 kHz, 8 s | 39,816 | 56 | 60 us | 199 us | 450 us | 2.1 ms |
 
+The latency is a full network round trip (two Modbus transactions over TCP loopback) into a Python server, so most of it is the server side; tail spikes are OS scheduling. On a real PLC over Ethernet expect the wire and the device to dominate instead. The "mean error" the controllers print includes the initial fill from 300 mm, so it looks large; the settled error is what the demo reports.
+
+## Run
+```bash
+python -m unittest discover -s tests       # 8 tests, ~30 s: Modbus frames and exceptions, plant equilibrium, interlock, closed loop
+python run_demo.py                         # closed-loop scenario with latency
