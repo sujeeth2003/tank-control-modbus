@@ -42,3 +42,12 @@ The latency is a full network round trip (two Modbus transactions over TCP loopb
 ```bash
 python -m unittest discover -s tests       # 8 tests, ~30 s: Modbus frames and exceptions, plant equilibrium, interlock, closed loop
 python run_demo.py                         # closed-loop scenario with latency
+# C++ controller (any C++17 compiler; Windows: add -lws2_32)
+g++ -O2 -std=c++17 controller/ctl.cpp -o ctl
+python serve_plant.py --port 1502 &
+./ctl 127.0.0.1 1502 1000 1000 20
+```
+Test highlights: the encoded frame matches the Modbus spec example byte for byte; 500 write/read pairs on one connection; the open-loop tank settles at the analytic Torricelli equilibrium (1.000 m at 50% valve); the interlock engages and the level never passes 1850 mm even with the valve commanded fully open.
+
+## Limits
+Real-time here means the plant advances by the wall-clock time between steps, on a general-purpose OS (no RTOS, no priority isolation), so worst-case latency is not bounded. Modbus has no authentication or encryption (a known property of the protocol); do not expose it beyond a lab network. OPC UA or MQTT would be the next protocol to add.
